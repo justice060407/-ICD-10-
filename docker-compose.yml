@@ -1,0 +1,89 @@
+# 临床大模型与病历挖掘 · 微课实验环境
+#
+# ── 场景 1：无显卡机房（最常见，也是本课程的默认设计）──────────────
+#     docker compose up course
+#   自动跑通 脱敏 → NER → ICD → 构建微调数据，产出落在 ./out
+#
+# ── 场景 2：点开即用（推荐给第一次上课的学生）──────────────────────
+#     docker compose up viewer
+#   浏览器打开 http://localhost:8000/效果预览.html
+#
+# ── 场景 3：边讲边演示 ────────────────────────────────────────────
+#     docker compose up jupyter        → http://localhost:8888
+#
+# ── 场景 4：Linux GPU 服务器（3090，可选）─────────────────────────
+#     docker compose --profile gpu up trainer
+#   需先安装 nvidia-container-toolkit。Windows 机房请改用本地 venv，
+#   参见 docs/3090机房实操手册.md
+#
+# ── 体积自检（开题报告 4.2 要求 <500MB）───────────────────────────
+#     docker images clinical-llm-course:base
+
+services:
+
+  course:
+    build:
+      context: .
+      target: base
+    image: clinical-llm-course:base
+    container_name: clm-course
+    volumes:
+      - ./out:/course/out
+      - ./data:/course/data
+    command: >
+      python src/run_pipeline.py --key clinical-llm-course-2026
+
+  viewer:
+    build:
+      context: .
+      target: base
+    image: clinical-llm-course:base
+    container_name: clm-viewer
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./out:/course/out
+      - ./data:/course/data
+    command: >
+      sh -c "python src/run_pipeline.py --key clinical-llm-course-2026 &&
+             python tools/demo_view.py --out out &&
+             python -m http.server 8000 --directory out"
+
+  jupyter:
+    build:
+      context: .
+      target: base
+    image: clinical-llm-course:base
+    container_name: clm-jupyter
+    working_dir: /course
+    ports:
+      - "8888:8888"
+    volumes:
+      - .:/course
+    # jupyter 不在交付镜像内（为了压到 500MB 以下），此处在教学网络可用时临时安装
+    command: >
+      sh -c "pip install --no-input jupyterlab -q &&
+             jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
+             --ServerApp.token=course --ServerApp.password=''"
+
+  trainer:
+    profiles: ["gpu"]
+    build:
+      context: .
+      target: gpu
+    image: clinical-llm-course:gpu
+    container_name: clm-trainer
+    volumes:
+      - ./out:/course/out
+      - ./models:/course/models
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      python3 src/train_lora.py
+      --data out/sft_train.jsonl --epochs 3 --rank 16 --lr 2e-4

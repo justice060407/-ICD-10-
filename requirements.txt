@@ -1,0 +1,19 @@
+# 基础运行时（脱敏 / NER / ICD / 数据构建 全部只依赖标准库，无需联网）
+# 以下为可选增强组件，按实验需要安装
+
+# --- 实验 6：LoRA 微调（A/B 档算力需要，C 档可跳过） ---
+torch>=2.1.0
+transformers>=4.40.0
+peft>=0.10.0
+datasets>=2.18.0
+accelerate>=0.29.0
+
+# --- 8GB 显卡 4bit 量化微调时需要 ---
+bitsandbytes>=0.43.0; sys_platform != 'win32'
+
+# --- 实验 7：检索增强问答与评测 ---
+scikit-learn>=1.4.0
+rank-bm25>=0.2.2
+
+# --- 教学交互环境 ---
+jupyterlab>=4.1.0
